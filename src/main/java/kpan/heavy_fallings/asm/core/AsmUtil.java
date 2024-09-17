@@ -1,6 +1,8 @@
 package kpan.heavy_fallings.asm.core;
 
 import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.List;
 import javax.annotation.Nullable;
 import kpan.heavy_fallings.ModTagsGenerated;
 import net.minecraftforge.fml.relauncher.FMLLaunchHandler;
@@ -19,15 +21,6 @@ public class AsmUtil {
     public static final Logger LOGGER = LogManager.getLogger(ModTagsGenerated.MODNAME);
 
     public static boolean isDeobfEnvironment() { return FMLLaunchHandler.isDeobfuscatedEnvironment(); }
-
-    public static boolean isOptifineLoaded() {
-        try {
-            Class.forName("optifine.Patcher");
-        } catch (ClassNotFoundException e) {
-            return false;
-        }
-        return true;
-    }
 
     public static String toMethodDesc(Object returnType, Object... rawDesc) {
         StringBuilder sb = new StringBuilder("(");
@@ -55,7 +48,7 @@ public class AsmUtil {
                     || desc.equals(AsmTypes.LONG) || desc.equals(AsmTypes.FLOAT) || desc.equals(AsmTypes.DOUBLE))
                 return arr_str + desc;
             desc = desc.replace('.', '/');
-            desc = desc.matches("L.+;") ? desc : "L" + desc + ";";//全体とマッチ
+            desc = desc.matches("L.+;") ? desc : "L" + desc + ";";// 全体とマッチ
             return arr_str + desc;
         } else if (raw instanceof Object[]) {
             StringBuilder sb = new StringBuilder();
@@ -124,6 +117,41 @@ public class AsmUtil {
                 return Opcodes.DRETURN;
             default:
                 return Opcodes.ARETURN;
+        }
+    }
+
+    public static String insertToMethodDesc(String methodDesc, int index, String desc) {
+        List<String> list = decomposeMethodDesc(methodDesc);
+        String returnDesc = list.remove(list.size() - 1);
+        list.add(index, desc);
+        return toMethodDesc(returnDesc, list.toArray());
+    }
+
+    public static List<String> decomposeMethodDesc(String methodDesc) {
+        if (methodDesc.charAt(0) != '(')
+            throw new IllegalArgumentException("無効なMethodDesc：" + methodDesc);
+        List<String> res = new ArrayList<>();
+        int i = 1;
+        int startIdx = -1;
+        while (true) {
+            switch (methodDesc.charAt(i)) {
+                case ')' -> {
+                    res.add(methodDesc.substring(i + 1));// 戻り値は最後
+                    return res;
+                }
+                case 'L' -> {
+                    startIdx = i;
+                }
+                case ';' -> {
+                    res.add(methodDesc.substring(startIdx, i + 1));
+                    startIdx = -1;
+                }
+                default -> {
+                    if (startIdx == -1)
+                        res.add(String.valueOf(methodDesc.charAt(i)));
+                }
+            }
+            i++;
         }
     }
 
