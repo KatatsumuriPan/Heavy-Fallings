@@ -1,0 +1,12 @@
+[{
+    "modid": "${modid}",
+    "name": "${modname}",
+    "description": "I think a gravel block is stronger than a torch.",
+    "version": "${version}",
+    "mcversion": "${mcversion}",
+    "logoFile": "",
+    "url": "",
+    "authorList": ["Katatsumuri.pan"],
+    "credits": "",
+    "dependencies": []
+}]
