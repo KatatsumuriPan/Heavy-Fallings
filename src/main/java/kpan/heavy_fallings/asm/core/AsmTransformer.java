@@ -5,6 +5,7 @@ import kpan.heavy_fallings.asm.core.adapters.InjectInstructionsAdapter;
 import kpan.heavy_fallings.asm.core.adapters.Instructions;
 import kpan.heavy_fallings.asm.core.adapters.MixinAccessorAdapter;
 import kpan.heavy_fallings.asm.core.adapters.MyClassVisitor;
+import kpan.heavy_fallings.asm.tf.TF_EntityFallingBlock;
 import kpan.heavy_fallings.util.ListUtil;
 import kpan.heavy_fallings.util.ReflectionUtil;
 import net.minecraft.launchwrapper.IClassTransformer;
@@ -40,6 +41,7 @@ public class AsmTransformer implements IClassTransformer {
             ClassVisitor cv = cw;
             cv = rearrangeThisAfterDeobfuscation(cv, transformedName);
             cv = MixinAccessorAdapter.transformAccessor(cv, transformedName);
+            cv = TF_EntityFallingBlock.appendVisitor(cv, transformedName);
 
             if (cv == cw)
                 return bytes;
