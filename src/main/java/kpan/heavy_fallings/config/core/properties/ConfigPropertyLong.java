@@ -1,123 +1,46 @@
 package kpan.heavy_fallings.config.core.properties;
 
+import java.lang.reflect.Field;
+import kpan.heavy_fallings.config.core.ConfigAnnotations.RangeLong;
 import kpan.heavy_fallings.config.core.ConfigSide;
-import kpan.heavy_fallings.config.core.gui.ModGuiConfig;
-import kpan.heavy_fallings.config.core.gui.ModGuiConfigEntries;
-import kpan.heavy_fallings.config.core.gui.ModGuiConfigEntries.IGuiConfigEntry;
-import kpan.heavy_fallings.config.core.gui.ModGuiConfigEntries.LongEntry;
-import net.minecraftforge.fml.relauncher.Side;
-import net.minecraftforge.fml.relauncher.SideOnly;
+import kpan.heavy_fallings.config.core.properties.PropertyValueType.TypeLong;
+import org.jetbrains.annotations.Nullable;
 
-public class ConfigPropertyLong extends AbstractConfigProperty {
+public final class ConfigPropertyLong extends ConfigPropertySingle<Long> {
 
-	public static final String TYPE = "L";
+    private boolean hasSlidingControl = false;
 
-	private final long defaultValue;
-	private final long minValue;
-	private final long maxValue;
-	private long value;
-	private boolean hasSlidingControl = false;
+    public ConfigPropertyLong(Field field, @Nullable Object fieldOwnerInstance, String id, String commentForFile, int order, ConfigSide side) throws IllegalAccessException {
+        super(field, fieldOwnerInstance, id, commentForFile, order, side, createTypeLong(field.getAnnotation(RangeLong.class)));
+    }
 
-	public ConfigPropertyLong(String id, long defaultValue, long minValue, long maxValue, String commentForFile, int order, ConfigSide side) {
-		super(id, commentForFile, order, side);
-		this.defaultValue = defaultValue;
-		this.minValue = minValue;
-		this.maxValue = maxValue;
-		value = defaultValue;
-	}
+    private static TypeLong createTypeLong(@Nullable RangeLong range) {
+        return range != null ? new TypeLong(range.minValue(), range.maxValue()) : new TypeLong();
+    }
 
-	public long getValue() {
-		return value;
-	}
+    @Override
+    public String getAdditionalComment() {
+        long minValue = ((TypeLong) valueType).minValue;
+        long maxValue = ((TypeLong) valueType).maxValue;
+        if (minValue == Long.MIN_VALUE) {
+            if (maxValue == Long.MAX_VALUE)
+                return "Default: " + defaultValue;
+            else
+                return "Range: ~ " + maxValue + "\nDefault: " + defaultValue;
+        } else {
+            if (maxValue == Long.MAX_VALUE)
+                return "Range: " + minValue + " ~" + "\nDefault: " + defaultValue;
+            else
+                return "Range: " + minValue + " ~ " + maxValue + "\nDefault: " + defaultValue;
+        }
+    }
 
-	public void setValue(long value) {
-		this.value = value;
-		dirty = true;
-	}
 
-	public long getMinValue() {
-		return minValue;
-	}
+    public boolean hasSlidingControl() {
+        return hasSlidingControl;
+    }
 
-	public long getMaxValue() {
-		return maxValue;
-	}
-
-	@Override
-	public boolean readValue(String value) {
-		try {
-			long i = Long.parseLong(value);
-			if (i < minValue || i > maxValue)
-				return false;
-			this.value = Long.parseLong(value);
-			dirty = true;
-			return true;
-		} catch (NumberFormatException ignore) {
-			return false;
-		}
-	}
-
-	@Override
-	public String getAdditionalComment() {
-		if (minValue == Long.MIN_VALUE) {
-			if (maxValue == Long.MAX_VALUE)
-				return "Default: " + defaultValue;
-			else
-				return "Range: ~ " + maxValue + "\nDefault: " + defaultValue;
-		} else {
-			if (maxValue == Long.MAX_VALUE)
-				return "Range: " + minValue + " ~" + "\nDefault: " + defaultValue;
-			else
-				return "Range: " + minValue + " ~ " + maxValue + "\nDefault: " + defaultValue;
-		}
-	}
-
-	@Override
-	public String getTypeString() {
-		return TYPE;
-	}
-
-	@Override
-	public String getValueString() {
-		return value + "";
-	}
-
-	@Override
-	public String getDefaultValueString() {
-		return defaultValue + "";
-	}
-
-	@Override
-	public boolean isDefault() {
-		return value == defaultValue;
-	}
-
-	@Override
-	public void setToDefault() {
-		value = defaultValue;
-	}
-
-	@Override
-	public boolean isValidValue(String str) {
-		try {
-			long value = Long.parseLong(str);
-			return value >= minValue && value <= maxValue;
-		} catch (NumberFormatException ignore) {
-			return false;
-		}
-	}
-
-	@Override
-	@SideOnly(Side.CLIENT)
-	public IGuiConfigEntry toEntry(ModGuiConfig screen, ModGuiConfigEntries entryList) {
-		return new LongEntry(screen, entryList, this);
-	}
-
-	public boolean hasSlidingControl() {
-		return hasSlidingControl;
-	}
-
-	public void setHasSlidingControl(boolean hasSlidingControl) {
-		this.hasSlidingControl = hasSlidingControl;
-	}
+    public void setHasSlidingControl(boolean hasSlidingControl) {
+        this.hasSlidingControl = hasSlidingControl;
+    }
 }
