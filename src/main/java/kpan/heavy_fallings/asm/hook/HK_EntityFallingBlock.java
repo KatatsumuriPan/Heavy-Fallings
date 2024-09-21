@@ -20,27 +20,27 @@ public class HK_EntityFallingBlock {
         IBlockState iblockstate = world.getBlockState(pos);
         Block block = iblockstate.getBlock();
 
-        if (ConfigHolder.common.breaks.stream().anyMatch(p -> p.test(iblockstate))) {
-            drop(world, fallingBlock, block, iblockstate, false);
+        if (ConfigHolder.common.breakable.stream().anyMatch(p -> p.test(iblockstate, world, pos))) {
+            drop(world, pos, fallingBlock, block, iblockstate, true);
             return true;
         }
-        if (ConfigHolder.common.nonBreaks.stream().anyMatch(p -> p.test(iblockstate)))
+        if (ConfigHolder.common.nonBreakable.stream().anyMatch(p -> p.test(iblockstate, world, pos)))
             return false;
 
         if (!((fallingBlock instanceof EntityPlayer) || !net.minecraftforge.event.ForgeEventFactory.onBlockPlace(fallingBlock, new net.minecraftforge.common.util.BlockSnapshot(world, pos, blockIn.getDefaultState()), sidePlacedOn).isCanceled()))
             return false;
 
         if (iblockstate.getMaterial() == Material.CIRCUITS && blockIn == Blocks.ANVIL) {
-            drop(world, fallingBlock, block, iblockstate, false);
+            drop(world, pos, fallingBlock, block, iblockstate, false);
             return true;
         }
         if (block.isReplaceable(world, pos) && blockIn.canPlaceBlockOnSide(world, pos, sidePlacedOn)) {
-            drop(world, fallingBlock, block, iblockstate, false);
+            drop(world, pos, fallingBlock, block, iblockstate, false);
             return true;
         }
 
         if (iblockstate.getCollisionBoundingBox(world, pos) == Block.NULL_AABB || iblockstate.getBlockHardness(world, pos) <= 0.5f) {
-            drop(world, fallingBlock, block, iblockstate, true);
+            drop(world, pos, fallingBlock, block, iblockstate, true);
             return true;
         }
 
@@ -48,15 +48,15 @@ public class HK_EntityFallingBlock {
         return false;
     }
 
-    private static void drop(World world, @Nullable Entity fallingBlock, Block block, IBlockState iblockstate1, boolean defaultValue) {
-        if (willDrop(iblockstate1, defaultValue))
+    private static void drop(World world, BlockPos pos, @Nullable Entity fallingBlock, Block block, IBlockState iblockstate1, boolean defaultValue) {
+        if (willDrop(iblockstate1, world, pos, defaultValue))
             fallingBlock.entityDropItem(new ItemStack(block.getItemDropped(iblockstate1, world.rand, 0), 1, block.damageDropped(iblockstate1)), 0.0F);
     }
 
-    private static boolean willDrop(IBlockState iblockstate1, boolean defaultValue) {
-        if (ConfigHolder.common.dropOnBroken.stream().anyMatch(p -> p.test(iblockstate1)))
+    private static boolean willDrop(IBlockState iblockstate1, World world, BlockPos pos, boolean defaultValue) {
+        if (ConfigHolder.common.dropsWhenBroken.stream().anyMatch(p -> p.test(iblockstate1, world, pos)))
             return true;
-        if (ConfigHolder.common.notDropOnBroken.stream().anyMatch(p -> p.test(iblockstate1)))
+        if (ConfigHolder.common.noDropsWhenBroken.stream().anyMatch(p -> p.test(iblockstate1, world, pos)))
             return false;
         return defaultValue;
     }

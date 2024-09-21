@@ -1,15 +1,15 @@
 package kpan.heavy_fallings.config;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
-import java.util.function.Predicate;
 import kpan.heavy_fallings.config.core.ConfigAnnotations.ConfigOrder;
 import kpan.heavy_fallings.config.core.ConfigAnnotations.FileComment;
 import kpan.heavy_fallings.config.core.ConfigAnnotations.Id;
 import kpan.heavy_fallings.config.core.ConfigAnnotations.Side;
 import kpan.heavy_fallings.config.core.ConfigSide;
 import kpan.heavy_fallings.config.core.ConfigVersionUpdateContext;
-import net.minecraft.block.state.IBlockState;
+import kpan.heavy_fallings.util.IBlockPredicate;
 
 public class ConfigHolder {
 
@@ -31,11 +31,25 @@ public class ConfigHolder {
 
     public static class Common {
 
-        public List<Predicate<IBlockState>> breaks = new ArrayList<>();
-        public List<Predicate<IBlockState>> nonBreaks = new ArrayList<>();
+        @Id("breakable")
+        @FileComment("Blocks that will be broken by a falling block.")
+        @ConfigOrder(1)
+        public List<IBlockPredicate> breakable = new ArrayList<>();
 
-        public List<Predicate<IBlockState>> dropOnBroken = new ArrayList<>();
-        public List<Predicate<IBlockState>> notDropOnBroken = new ArrayList<>();
+        @Id("nonBreakable")
+        @FileComment("Blocks that won't be broken by a falling block.")
+        @ConfigOrder(2)
+        public List<IBlockPredicate> nonBreakable = new ArrayList<>(Arrays.asList(IBlockPredicate.parse("bed")));
+
+        @Id("dropsWhenBroken")
+        @FileComment("Blocks that drop the items when broken.")
+        @ConfigOrder(3)
+        public List<IBlockPredicate> dropsWhenBroken = new ArrayList<>();
+
+        @Id("noDropsWhenBroken")
+        @FileComment("Blocks that drop no items when broken.")
+        @ConfigOrder(4)
+        public List<IBlockPredicate> noDropsWhenBroken = new ArrayList<>();
 
     }
 
