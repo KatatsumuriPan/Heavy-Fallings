@@ -7,7 +7,9 @@ import java.lang.annotation.Target;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import kpan.heavy_fallings.ModTagsGenerated;
 import kpan.heavy_fallings.asm.core.AccessTransformerForMixin;
 import kpan.heavy_fallings.asm.core.AsmNameRemapper;
@@ -29,8 +31,9 @@ public class MixinAccessorAdapter extends MyClassVisitor {
 
     private final String targetClassName;
     private final Class<?> accessor;
-    private final Map<String, FieldInfo> fieldInfoMap = new HashMap<>(); // mcpFieldName -> info
-    private final Map<String, MethodInfo> methodInfoMap = new HashMap<>(); // mcpMethodName -> info
+    private final Map<String, FieldInfo> fieldInfoMap = new HashMap<>(); // mcpName -> info
+    private final Map<String, MethodInfo> methodInfoMap = new HashMap<>(); // mcpName -> info
+    private final Set<String> newFields = new HashSet<>();
     public MixinAccessorAdapter(ClassVisitor cv, String targetClassName, String accessorClassName) {
         super(cv, targetClassName);
         this.targetClassName = targetClassName.replace('.', '/');
@@ -49,13 +52,13 @@ public class MixinAccessorAdapter extends MyClassVisitor {
 
     @Override
     public FieldVisitor visitField(int access, String name, String desc, String signature, Object value) {
-        fieldInfoMap.put(name, new FieldInfo(AsmNameRemapper.srg2McpFieldName(name), desc, (access & Opcodes.ACC_STATIC) != 0));
+        fieldInfoMap.put(AsmNameRemapper.runtime2McpFieldName(name), new FieldInfo(name, desc, (access & Opcodes.ACC_STATIC) != 0));
         return super.visitField(access, name, desc, signature, value);
     }
 
     @Override
     public MethodVisitor visitMethod(int access, String name, String desc, String signature, String[] exceptions) {
-        methodInfoMap.put(name, new MethodInfo(AsmNameRemapper.srg2McpMethodName(name), desc, (access & Opcodes.ACC_STATIC) != 0, (access & Opcodes.ACC_PRIVATE) != 0));
+        methodInfoMap.put(AsmNameRemapper.runtime2McpMethodName(name), new MethodInfo(name, desc, (access & Opcodes.ACC_STATIC) != 0, (access & Opcodes.ACC_PRIVATE) != 0));
         return super.visitMethod(access, name, desc, signature, exceptions);
     }
 
@@ -64,124 +67,130 @@ public class MixinAccessorAdapter extends MyClassVisitor {
         for (Method method : accessor.getMethods()) {
             String methodName = method.getName();
             if (methodName.startsWith("get_")) {
-                //getter
-                String mcp_name = methodName.substring("get_".length());
+                // getter
+                String mcpName = methodName.substring("get_".length());
                 Class<?> type = method.getReturnType();
-                boolean is_static = Modifier.isStatic(method.getModifiers());
+                boolean isStatic = Modifier.isStatic(method.getModifiers());
                 if (type == void.class)
                     throw new IllegalStateException("return type of getter is void!:" + methodName);
                 if (method.getParameterCount() != 0)
                     throw new IllegalStateException("parameters of getter are empty!:" + methodName);
 
-                String fieldName;
+                String runtimeName;
                 String desc = AsmUtil.toDesc(type);
                 if (method.getAnnotation(NewField.class) != null) {
-                    if (fieldInfoMap.containsKey(mcp_name))
-                        throw new IllegalStateException("Field duplicated!:" + methodName);
-                    String generics = null;//TODO
-                    FieldVisitor fv = visitField(Opcodes.ACC_PUBLIC | (is_static ? Opcodes.ACC_STATIC : 0), mcp_name, desc, generics, null);
-                    if (fv != null)
-                        fv.visitEnd();
-                    fieldName = mcp_name;
+                    if (!newFields.contains(mcpName)) {
+                        if (fieldInfoMap.containsKey(mcpName))
+                            throw new IllegalStateException("Field duplicated!:" + methodName);
+                        String generics = null;// TODO
+                        FieldVisitor fv = super.visitField(Opcodes.ACC_PUBLIC | (isStatic ? Opcodes.ACC_STATIC : 0), mcpName, desc, generics, null);
+                        if (fv != null)
+                            fv.visitEnd();
+                        newFields.add(mcpName);
+                    }
+                    runtimeName = mcpName;// フィールド追加なのでget_の名前からそのまま作る
                 } else {
-                    FieldInfo fieldInfo = fieldInfoMap.get(mcp_name);
+                    FieldInfo fieldInfo = fieldInfoMap.get(mcpName);
                     if (fieldInfo == null)
-                        throw new IllegalStateException("Unknown field:" + mcp_name + "(" + methodName + ")");
+                        throw new IllegalStateException("Unknown field:" + mcpName + "(" + methodName + ")");
+                    runtimeName = fieldInfo.runtimeName;
                     if (!fieldInfo.desc.equals(desc))
-                        throw new IllegalStateException("Unmatched field type:" + mcp_name + " of " + methodName + " (" + fieldInfo.desc + "!=" + desc + ")");
-                    if (fieldInfo.isStatic != is_static)
-                        throw new IllegalStateException("Unmatched field access(static):" + mcp_name + "(" + methodName + ")");
-                    fieldName = fieldInfo.srgName;
+                        throw new IllegalStateException("Unmatched field type:" + runtimeName + " of " + methodName + " (" + fieldInfo.desc + "!=" + desc + ")");
+                    if (fieldInfo.isStatic != isStatic)
+                        throw new IllegalStateException("Unmatched field access(static):" + runtimeName + "(" + methodName + ")");
                 }
 
-                MethodVisitor mv = visitMethod(Opcodes.ACC_PUBLIC | (is_static ? Opcodes.ACC_STATIC : 0), methodName, AsmUtil.toMethodDesc(desc), null, null);
+                MethodVisitor mv = visitMethod(Opcodes.ACC_PUBLIC | (isStatic ? Opcodes.ACC_STATIC : 0), methodName, AsmUtil.toMethodDesc(desc), null, null);
                 if (mv != null) {
                     mv.visitCode();
-                    if (is_static) {
-                        mv.visitFieldInsn(Opcodes.GETSTATIC, targetClassName, fieldName, desc);
+                    if (isStatic) {
+                        mv.visitFieldInsn(Opcodes.GETSTATIC, targetClassName, runtimeName, desc);
                     } else {
                         mv.visitVarInsn(Opcodes.ALOAD, 0);
-                        mv.visitFieldInsn(Opcodes.GETFIELD, targetClassName, fieldName, desc);
+                        mv.visitFieldInsn(Opcodes.GETFIELD, targetClassName, runtimeName, desc);
                     }
                     mv.visitInsn(AsmUtil.toReturnOpcode(desc));
-                    mv.visitMaxs(0, 0);//引数は無視され、再計算される(Write時に再計算されるのでtrace時点では0,0のまま)
+                    mv.visitMaxs(0, 0);// 引数は無視され、再計算される(Write時に再計算されるのでtrace時点では0,0のまま)
                     mv.visitEnd();
                 }
 
             } else if (methodName.startsWith("set_")) {
-                //setter
-                String mcp_name = methodName.substring("set_".length());
+                // setter
+                String mcpName = methodName.substring("set_".length());
                 Class<?> type = method.getParameterTypes()[0];
-                boolean is_static = Modifier.isStatic(method.getModifiers());
+                boolean isStatic = Modifier.isStatic(method.getModifiers());
                 if (method.getReturnType() != void.class)
                     throw new IllegalStateException("return type of getter is not void!:" + methodName);
                 if (method.getParameterCount() != 1)
                     throw new IllegalStateException("parameters num of getter is not 1!:" + methodName);
 
-                String fieldName;
+                String runtimeName;
                 String desc = AsmUtil.toDesc(type);
                 if (method.getAnnotation(NewField.class) != null) {
-                    if (fieldInfoMap.containsKey(mcp_name))
-                        throw new IllegalStateException("Field duplicated!:" + methodName);
-                    String runtimeGenerics = null;//TODO
-                    FieldVisitor fv = visitField(Opcodes.ACC_PUBLIC | (is_static ? Opcodes.ACC_STATIC : 0), mcp_name, desc, runtimeGenerics, null);
-                    if (fv != null)
-                        fv.visitEnd();
-                    fieldName = mcp_name;
+                    if (!newFields.contains(mcpName)) {
+                        if (fieldInfoMap.containsKey(mcpName))
+                            throw new IllegalStateException("Field duplicated!:" + methodName);
+                        String generics = null;// TODO
+                        FieldVisitor fv = visitField(Opcodes.ACC_PUBLIC | (isStatic ? Opcodes.ACC_STATIC : 0), mcpName, desc, generics, null);
+                        if (fv != null)
+                            fv.visitEnd();
+                        newFields.add(mcpName);
+                    }
+                    runtimeName = mcpName;
                 } else {
-                    FieldInfo fieldInfo = fieldInfoMap.get(mcp_name);
+                    FieldInfo fieldInfo = fieldInfoMap.get(mcpName);
                     if (fieldInfo == null)
-                        throw new IllegalStateException("Unknown field:" + mcp_name + "(" + methodName + ")");
+                        throw new IllegalStateException("Unknown field:" + mcpName + "(" + methodName + ")");
+                    runtimeName = fieldInfo.runtimeName;
                     if (!fieldInfo.desc.equals(desc))
-                        throw new IllegalStateException("Unmatched field type:" + mcp_name + "(" + methodName + ")");
-                    if (fieldInfo.isStatic != is_static)
-                        throw new IllegalStateException("Unmatched field access(static):" + mcp_name + "(" + methodName + ")");
-                    fieldName = fieldInfo.srgName;
+                        throw new IllegalStateException("Unmatched field type:" + runtimeName + "(" + methodName + ")");
+                    if (fieldInfo.isStatic != isStatic)
+                        throw new IllegalStateException("Unmatched field access(static):" + runtimeName + "(" + methodName + ")");
                 }
 
-                MethodVisitor mv = visitMethod(Opcodes.ACC_PUBLIC | (is_static ? Opcodes.ACC_STATIC : 0), methodName, AsmUtil.toMethodDesc(AsmTypes.VOID, desc), null, null);
+                MethodVisitor mv = visitMethod(Opcodes.ACC_PUBLIC | (isStatic ? Opcodes.ACC_STATIC : 0), methodName, AsmUtil.toMethodDesc(AsmTypes.VOID, desc), null, null);
                 if (mv != null) {
                     mv.visitCode();
-                    if (is_static) {
+                    if (isStatic) {
                         mv.visitVarInsn(AsmUtil.toLoadOpcode(desc), 0);
-                        mv.visitFieldInsn(Opcodes.PUTSTATIC, targetClassName, fieldName, desc);
+                        mv.visitFieldInsn(Opcodes.PUTSTATIC, targetClassName, runtimeName, desc);
                     } else {
                         mv.visitVarInsn(Opcodes.ALOAD, 0);
                         mv.visitVarInsn(AsmUtil.toLoadOpcode(desc), 1);
-                        mv.visitFieldInsn(Opcodes.PUTFIELD, targetClassName, fieldName, desc);
+                        mv.visitFieldInsn(Opcodes.PUTFIELD, targetClassName, runtimeName, desc);
                     }
                     mv.visitInsn(Opcodes.RETURN);
-                    mv.visitMaxs(0, 0);//引数は無視され、再計算される(Write時に再計算されるのでtrace時点では0,0のまま)
+                    mv.visitMaxs(0, 0);// 引数は無視され、再計算される(Write時に再計算されるのでtrace時点では0,0のまま)
                     mv.visitEnd();
                 }
             } else if (method.getAnnotation(NewMethod.class) != null || !methodInfoMap.containsKey(methodName)) {
-                //staticじゃないならinterfaceがメソッドを持ってるので問題ない
-                //staticなものは無効とする
+                // staticじゃないならinterfaceがメソッドを持ってるので問題ない
+                // staticなものは無効とする（無視）
             } else {
-                //bridge
-                String method_desc = AsmUtil.toDesc(method);
-                boolean is_static = Modifier.isStatic(method.getModifiers());
+                // bridge
+                String methodDesc = AsmUtil.toDesc(method);
+                boolean isStatic = Modifier.isStatic(method.getModifiers());
                 MethodInfo methodInfo = methodInfoMap.get(methodName);
-                String srgName = methodInfo.srgName;
-                if (!methodInfo.desc.equals(method_desc))
-                    throw new IllegalStateException("Unknown method desc:" + srgName + "(" + methodName + ")");
-                if (methodInfo.isStatic != is_static)
-                    throw new IllegalStateException("Unmatched method access(static):" + srgName + "(" + methodName + ")");
+                String runtimeName = methodInfo.runtimeName;
+                if (!methodInfo.methodDesc.equals(methodDesc))
+                    throw new IllegalStateException("Unknown method desc:" + runtimeName + "(" + methodName + ")");
+                if (methodInfo.isStatic != isStatic)
+                    throw new IllegalStateException("Unmatched method access(static):" + runtimeName + "(" + methodName + ")");
 
-                if (methodName.equals(srgName)) {
-                    AccessTransformerForMixin.toPublic(targetClassName, methodName, method_desc);
+                if (methodName.equals(runtimeName)) {
+                    AccessTransformerForMixin.toPublic(targetClassName, methodName, methodDesc);
                 } else {
                     boolean is_private = methodInfo.isPrivate;
-                    MethodVisitor mv = visitMethod(Opcodes.ACC_PUBLIC | (is_static ? Opcodes.ACC_STATIC : 0), methodName, method_desc, null, null);
+                    MethodVisitor mv = visitMethod(Opcodes.ACC_PUBLIC | (isStatic ? Opcodes.ACC_STATIC : 0), methodName, methodDesc, null, null);
                     if (mv != null) {
                         mv.visitCode();
                         int offset = 0;
-                        //this
-                        if (!is_static) {
+                        // this
+                        if (!isStatic) {
                             mv.visitVarInsn(Opcodes.ALOAD, 0);
                             offset = 1;
                         }
-                        //params
+                        // params
                         for (int i = 0; i < method.getParameterCount(); i++) {
                             int opcode = AsmUtil.toLoadOpcode(AsmUtil.toDesc(method.getParameterTypes()[i]));
                             mv.visitVarInsn(opcode, offset);
@@ -190,17 +199,17 @@ public class MixinAccessorAdapter extends MyClassVisitor {
                             else
                                 offset += 1;
                         }
-                        //invoke
-                        if (is_static)
-                            mv.visitMethodInsn(Opcodes.INVOKESTATIC, targetClassName, srgName, method_desc, false);
+                        // invoke
+                        if (isStatic)
+                            mv.visitMethodInsn(Opcodes.INVOKESTATIC, targetClassName, runtimeName, methodDesc, false);
                         else if (is_private)
-                            mv.visitMethodInsn(Opcodes.INVOKESPECIAL, targetClassName, srgName, method_desc, false);
+                            mv.visitMethodInsn(Opcodes.INVOKESPECIAL, targetClassName, runtimeName, methodDesc, false);
                         else
-                            mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, targetClassName, srgName, method_desc, false);
-                        //return
+                            mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, targetClassName, runtimeName, methodDesc, false);
+                        // return
                         mv.visitInsn(AsmUtil.toReturnOpcode(AsmUtil.toDesc(method.getReturnType())));
 
-                        mv.visitMaxs(0, 0);//引数は無視され、再計算される(Write時に再計算されるのでtrace時点では0,0のまま)
+                        mv.visitMaxs(0, 0);// 引数は無視され、再計算される(Write時に再計算されるのでtrace時点では0,0のまま)
                         mv.visitEnd();
                     }
                 }
@@ -297,27 +306,27 @@ public class MixinAccessorAdapter extends MyClassVisitor {
                         @Override
                         public void visitEnd() {
                             if (name.startsWith("get_")) {
-                                //invoke
+                                // invoke
                                 mv.visitMethodInsn(Opcodes.INVOKESTATIC, mixinTarget.replace('.', '/'), name, desc, false);
-                                //return
+                                // return
                                 mv.visitInsn(AsmUtil.toReturnOpcode(desc.substring("()".length())));
                             } else if (name.startsWith("set_")) {
-                                //params
+                                // params
                                 mv.visitVarInsn(AsmUtil.toLoadOpcode(desc.substring(1, desc.length() - 2)), 0);
-                                //invoke
+                                // invoke
                                 mv.visitMethodInsn(Opcodes.INVOKESTATIC, mixinTarget.replace('.', '/'), name, desc, false);
-                                //return
+                                // return
                                 mv.visitInsn(Opcodes.RETURN);
                             } else {
                                 MethodDesc md = MethodDesc.fromMethodDesc(desc);
-                                //params
+                                // params
                                 AsmUtil.loadLocals(mv, md.paramsDesc, 0);
-                                //invoke
+                                // invoke
                                 mv.visitMethodInsn(Opcodes.INVOKESTATIC, mixinTarget.replace('.', '/'), name, desc, false);
-                                //return
+                                // return
                                 mv.visitInsn(AsmUtil.toReturnOpcode(md.returnDesc));
                             }
-                            mv.visitMaxs(0, 0);//引数は無視され、再計算される(Write時に再計算されるのでtrace時点では0,0のまま)
+                            mv.visitMaxs(0, 0);// 引数は無視され、再計算される(Write時に再計算されるのでtrace時点では0,0のまま)
                             super.visitEnd();
                         }
                     };
@@ -348,26 +357,26 @@ public class MixinAccessorAdapter extends MyClassVisitor {
     }
 
     private static class FieldInfo {
-        public final String srgName;
+        public final String runtimeName;
         public final String desc;
         public final boolean isStatic;
 
-        private FieldInfo(String srgName, String desc, boolean isStatic) {
-            this.srgName = srgName;
+        private FieldInfo(String runtimeName, String desc, boolean isStatic) {
+            this.runtimeName = runtimeName;
             this.desc = desc;
             this.isStatic = isStatic;
         }
     }
 
     private static class MethodInfo {
-        public final String srgName;
-        public final String desc;
+        public final String runtimeName;
+        public final String methodDesc;
         public final boolean isStatic;
         public final boolean isPrivate;
 
-        private MethodInfo(String srgName, String desc, boolean isStatic, boolean isPrivate) {
-            this.srgName = srgName;
-            this.desc = desc;
+        private MethodInfo(String runtimeName, String methodDesc, boolean isStatic, boolean isPrivate) {
+            this.runtimeName = runtimeName;
+            this.methodDesc = methodDesc;
             this.isStatic = isStatic;
             this.isPrivate = isPrivate;
         }

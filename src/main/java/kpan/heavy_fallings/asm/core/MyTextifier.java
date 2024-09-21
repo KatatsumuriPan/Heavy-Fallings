@@ -7,10 +7,9 @@ public class MyTextifier extends Textifier {
     private final @Nullable String methodName;
 
     public MyTextifier(@Nullable String methodName) {
-        super(AsmUtil.ASM_VER);//引数アリじゃないとException投げる
+        super(AsmUtil.ASM_VER);// 引数アリじゃないとException投げる
         this.methodName = methodName;
     }
-
     @Override
     public void visitFieldInsn(int opcode, String owner, String name, String desc) {
         buf.setLength(0);
@@ -23,19 +22,17 @@ public class MyTextifier extends Textifier {
             buf.append("//");
             buf.append(owner);
             buf.append('.');
-            buf.append(AsmNameRemapper.srg2McpFieldName(name));
+            buf.append(AsmNameRemapper.runtime2McpFieldName(name));
             buf.append(' ');
             buf.append(desc);
         }
         buf.append('\n');
         text.add(buf.toString());
     }
-
     @Override
     public void visitMaxs(int maxStack, int maxLocals) {
         super.visitMaxs(maxStack, maxLocals);
     }
-
     @Override
     public void visitMethodEnd() {
         if (methodName != null)

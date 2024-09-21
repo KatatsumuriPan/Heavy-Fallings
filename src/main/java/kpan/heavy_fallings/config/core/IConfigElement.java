@@ -9,12 +9,21 @@ import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 
 public interface IConfigElement {
-	int getOrder();
-	ConfigSide getSide();
+    int getOrder();
+    ConfigSide getSide();
 
-	void write(BufferedWriter out, int indent, String path) throws IOException;
-	boolean showInGui();
+    String getNameTranslationKey(String path);
 
-	@SideOnly(Side.CLIENT)
-	IGuiConfigEntry toEntry(ModGuiConfig screen, ModGuiConfigEntries entryList);
+    String getCommentTranslationKey(String path);
+
+    boolean requiresWorldRestart();
+    boolean requiresMcRestart();
+
+    void write(BufferedWriter out, int indent, String path) throws IOException;
+
+    @SideOnly(Side.CLIENT)
+    boolean showInGui();
+
+    @SideOnly(Side.CLIENT)
+    IGuiConfigEntry toEntry(ModGuiConfig screen, ModGuiConfigEntries entryList);
 }

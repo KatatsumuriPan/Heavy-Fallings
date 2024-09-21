@@ -5,7 +5,7 @@ import kpan.heavy_fallings.asm.core.adapters.InjectInstructionsAdapter;
 import kpan.heavy_fallings.asm.core.adapters.Instructions;
 import kpan.heavy_fallings.asm.core.adapters.MixinAccessorAdapter;
 import kpan.heavy_fallings.asm.core.adapters.MyClassVisitor;
-import kpan.heavy_fallings.asm.tf.TF_FontRenderer;
+import kpan.heavy_fallings.asm.tf.TF_EntityFallingBlock;
 import kpan.heavy_fallings.util.ListUtil;
 import kpan.heavy_fallings.util.ReflectionUtil;
 import net.minecraft.launchwrapper.IClassTransformer;
@@ -27,29 +27,31 @@ public class AsmTransformer implements IClassTransformer {
     @Override
     public byte[] transform(String name, String transformedName, byte[] bytes) {
         try {
+            if (transformedName.equals("kpan.srg2mcp_name_remapper.Remapper"))
+                return bytes;
             AsmNameRemapper.init();
             if (bytes == null)
                 return null;
-            //byte配列を読み込み、利用しやすい形にする。
+
+            // byte配列を読み込み、利用しやすい形にする。
             ClassReader cr = new ClassReader(bytes);
-            //これのvisitを呼ぶことによって情報が溜まっていく。
-            ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES);//maxStack,maxLocal,frameの全てを計算
-            //Adapterを通して書き換え出来るようにする。
+            // これのvisitを呼ぶことによって情報が溜まっていく。
+            ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES);// maxStack,maxLocal,frameの全てを計算
+            // Adapterを通して書き換え出来るようにする。
             ClassVisitor cv = cw;
             cv = rearrangeThisAfterDeobfuscation(cv, transformedName);
             cv = MixinAccessorAdapter.transformAccessor(cv, transformedName);
-            cv = TF_FontRenderer.appendVisitor(cv, transformedName);
-            cv = TF_TileEntityFurnace.appendVisitor(cv, transformedName);
+            cv = TF_EntityFallingBlock.appendVisitor(cv, transformedName);
 
             if (cv == cw)
                 return bytes;
 
-            //元のクラスと同様の順番でvisitメソッドを呼んでくれる
+            // 元のクラスと同様の順番でvisitメソッドを呼んでくれる
             cr.accept(cv, 0);
 
             byte[] new_bytes = cw.toByteArray();
 
-            //Writer内の情報をbyte配列にして返す。
+            // Writer内の情報をbyte配列にして返す。
             return new_bytes;
         } catch (Throwable e) {
             AsmUtil.LOGGER.error("transformedName:" + transformedName);
@@ -58,7 +60,6 @@ public class AsmTransformer implements IClassTransformer {
             throw e;
         }
     }
-
 
     private static ClassVisitor rearrangeThisAfterDeobfuscation(ClassVisitor cv, String className) {
         if (!className.equals("net.minecraftforge.fml.common.Loader"))

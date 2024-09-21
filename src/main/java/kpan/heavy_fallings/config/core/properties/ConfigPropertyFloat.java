@@ -1,123 +1,46 @@
 package kpan.heavy_fallings.config.core.properties;
 
+import java.lang.reflect.Field;
+import kpan.heavy_fallings.config.core.ConfigAnnotations.RangeFloat;
 import kpan.heavy_fallings.config.core.ConfigSide;
-import kpan.heavy_fallings.config.core.gui.ModGuiConfig;
-import kpan.heavy_fallings.config.core.gui.ModGuiConfigEntries;
-import kpan.heavy_fallings.config.core.gui.ModGuiConfigEntries.FloatEntry;
-import kpan.heavy_fallings.config.core.gui.ModGuiConfigEntries.IGuiConfigEntry;
-import net.minecraftforge.fml.relauncher.Side;
-import net.minecraftforge.fml.relauncher.SideOnly;
+import kpan.heavy_fallings.config.core.properties.PropertyValueType.TypeFloat;
+import org.jetbrains.annotations.Nullable;
 
-public class ConfigPropertyFloat extends AbstractConfigProperty {
+public class ConfigPropertyFloat extends ConfigPropertySingle<Float> {
 
-	public static final String TYPE = "F";
+    private boolean hasSlidingControl = false;
 
-	private final float defaultValue;
-	private final float minValue;
-	private final float maxValue;
-	private float value;
-	private boolean hasSlidingControl = false;
+    public ConfigPropertyFloat(Field field, @Nullable Object fieldOwnerInstance, String id, String commentForFile, int order, ConfigSide side) throws IllegalAccessException {
+        super(field, fieldOwnerInstance, id, commentForFile, order, side, createTypeFloat(field.getAnnotation(RangeFloat.class)));
+    }
 
-	public ConfigPropertyFloat(String id, float defaultValue, float minValue, float maxValue, String commentForFile, int order, ConfigSide side) {
-		super(id, commentForFile, order, side);
-		this.defaultValue = defaultValue;
-		this.minValue = minValue;
-		this.maxValue = maxValue;
-		value = defaultValue;
-	}
+    private static TypeFloat createTypeFloat(@Nullable RangeFloat range) {
+        return range != null ? new TypeFloat(range.minValue(), range.maxValue()) : new TypeFloat();
+    }
 
-	public float getValue() {
-		return value;
-	}
+    @Override
+    public String getAdditionalComment() {
+        float minValue = ((TypeFloat) valueType).minValue;
+        float maxValue = ((TypeFloat) valueType).maxValue;
+        if (minValue == Float.NEGATIVE_INFINITY) {
+            if (maxValue == Float.POSITIVE_INFINITY)
+                return "Default: " + defaultValue;
+            else
+                return "Range: ~ " + maxValue + "\nDefault: " + defaultValue;
+        } else {
+            if (maxValue == Float.POSITIVE_INFINITY)
+                return "Range: " + minValue + " ~" + "\nDefault: " + defaultValue;
+            else
+                return "Range: " + minValue + " ~ " + maxValue + "\nDefault: " + defaultValue;
+        }
+    }
 
-	public void setValue(float value) {
-		this.value = value;
-		dirty = true;
-	}
 
-	public float getMinValue() {
-		return minValue;
-	}
+    public boolean hasSlidingControl() {
+        return hasSlidingControl;
+    }
 
-	public float getMaxValue() {
-		return maxValue;
-	}
-
-	@Override
-	public boolean readValue(String value) {
-		try {
-			float i = Float.parseFloat(value);
-			if (i < minValue || i > maxValue)
-				return false;
-			this.value = Float.parseFloat(value);
-			dirty = true;
-			return true;
-		} catch (NumberFormatException ignore) {
-			return false;
-		}
-	}
-
-	@Override
-	public String getAdditionalComment() {
-		if (minValue == Float.NEGATIVE_INFINITY) {
-			if (maxValue == Float.POSITIVE_INFINITY)
-				return "Default: " + defaultValue;
-			else
-				return "Range: ~ " + maxValue + "\nDefault: " + defaultValue;
-		} else {
-			if (maxValue == Float.POSITIVE_INFINITY)
-				return "Range: " + minValue + " ~" + "\nDefault: " + defaultValue;
-			else
-				return "Range: " + minValue + " ~ " + maxValue + "\nDefault: " + defaultValue;
-		}
-	}
-
-	@Override
-	public String getTypeString() {
-		return TYPE;
-	}
-
-	@Override
-	public String getValueString() {
-		return value + "";
-	}
-
-	@Override
-	public String getDefaultValueString() {
-		return defaultValue + "";
-	}
-
-	@Override
-	public boolean isDefault() {
-		return value == defaultValue;
-	}
-
-	@Override
-	public void setToDefault() {
-		value = defaultValue;
-	}
-
-	@Override
-	public boolean isValidValue(String str) {
-		try {
-			float value = Float.parseFloat(str);
-			return value >= minValue && value <= maxValue;
-		} catch (NumberFormatException ignore) {
-			return false;
-		}
-	}
-
-	@Override
-	@SideOnly(Side.CLIENT)
-	public IGuiConfigEntry toEntry(ModGuiConfig screen, ModGuiConfigEntries entryList) {
-		return new FloatEntry(screen, entryList, this);
-	}
-
-	public boolean hasSlidingControl() {
-		return hasSlidingControl;
-	}
-
-	public void setHasSlidingControl(boolean hasSlidingControl) {
-		this.hasSlidingControl = hasSlidingControl;
-	}
+    public void setHasSlidingControl(boolean hasSlidingControl) {
+        this.hasSlidingControl = hasSlidingControl;
+    }
 }

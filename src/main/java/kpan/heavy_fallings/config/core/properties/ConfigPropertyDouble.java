@@ -1,123 +1,45 @@
 package kpan.heavy_fallings.config.core.properties;
 
+import java.lang.reflect.Field;
+import kpan.heavy_fallings.config.core.ConfigAnnotations.RangeDouble;
 import kpan.heavy_fallings.config.core.ConfigSide;
-import kpan.heavy_fallings.config.core.gui.ModGuiConfig;
-import kpan.heavy_fallings.config.core.gui.ModGuiConfigEntries;
-import kpan.heavy_fallings.config.core.gui.ModGuiConfigEntries.DoubleEntry;
-import kpan.heavy_fallings.config.core.gui.ModGuiConfigEntries.IGuiConfigEntry;
-import net.minecraftforge.fml.relauncher.Side;
-import net.minecraftforge.fml.relauncher.SideOnly;
+import kpan.heavy_fallings.config.core.properties.PropertyValueType.TypeDouble;
+import org.jetbrains.annotations.Nullable;
 
-public class ConfigPropertyDouble extends AbstractConfigProperty {
+public class ConfigPropertyDouble extends ConfigPropertySingle<Double> {
 
-	public static final String TYPE = "D";
+    private boolean hasSlidingControl = false;
 
-	private final double defaultValue;
-	private final double minValue;
-	private final double maxValue;
-	private double value;
-	private boolean hasSlidingControl = false;
+    public ConfigPropertyDouble(Field field, @Nullable Object fieldOwnerInstance, String id, String commentForFile, int order, ConfigSide side) throws IllegalAccessException {
+        super(field, fieldOwnerInstance, id, commentForFile, order, side, createTypeDouble(field.getAnnotation(RangeDouble.class)));
+    }
 
-	public ConfigPropertyDouble(String id, double defaultValue, double minValue, double maxValue, String commentForFile, int order, ConfigSide side) {
-		super(id, commentForFile, order, side);
-		this.defaultValue = defaultValue;
-		this.minValue = minValue;
-		this.maxValue = maxValue;
-		value = defaultValue;
-	}
+    private static TypeDouble createTypeDouble(@Nullable RangeDouble range) {
+        return range != null ? new TypeDouble(range.minValue(), range.maxValue()) : new TypeDouble();
+    }
 
-	public double getValue() {
-		return value;
-	}
+    @Override
+    public String getAdditionalComment() {
+        double minValue = ((TypeDouble) valueType).minValue;
+        double maxValue = ((TypeDouble) valueType).maxValue;
+        if (minValue == Double.NEGATIVE_INFINITY) {
+            if (maxValue == Double.POSITIVE_INFINITY)
+                return "Default: " + defaultValue;
+            else
+                return "Range: ~ " + maxValue + "\nDefault: " + defaultValue;
+        } else {
+            if (maxValue == Double.POSITIVE_INFINITY)
+                return "Range: " + minValue + " ~" + "\nDefault: " + defaultValue;
+            else
+                return "Range: " + minValue + " ~ " + maxValue + "\nDefault: " + defaultValue;
+        }
+    }
 
-	public void setValue(double value) {
-		this.value = value;
-		dirty = true;
-	}
+    public boolean hasSlidingControl() {
+        return hasSlidingControl;
+    }
 
-	public double getMinValue() {
-		return minValue;
-	}
-
-	public double getMaxValue() {
-		return maxValue;
-	}
-
-	@Override
-	public boolean readValue(String value) {
-		try {
-			double i = Double.parseDouble(value);
-			if (i < minValue || i > maxValue)
-				return false;
-			this.value = Double.parseDouble(value);
-			dirty = true;
-			return true;
-		} catch (NumberFormatException ignore) {
-			return false;
-		}
-	}
-
-	@Override
-	public String getAdditionalComment() {
-		if (minValue == Double.NEGATIVE_INFINITY) {
-			if (maxValue == Double.POSITIVE_INFINITY)
-				return "Default: " + defaultValue;
-			else
-				return "Range: ~ " + maxValue + "\nDefault: " + defaultValue;
-		} else {
-			if (maxValue == Double.POSITIVE_INFINITY)
-				return "Range: " + minValue + " ~" + "\nDefault: " + defaultValue;
-			else
-				return "Range: " + minValue + " ~ " + maxValue + "\nDefault: " + defaultValue;
-		}
-	}
-
-	@Override
-	public String getTypeString() {
-		return TYPE;
-	}
-
-	@Override
-	public String getValueString() {
-		return value + "";
-	}
-
-	@Override
-	public String getDefaultValueString() {
-		return defaultValue + "";
-	}
-
-	@Override
-	public boolean isDefault() {
-		return value == defaultValue;
-	}
-
-	@Override
-	public void setToDefault() {
-		value = defaultValue;
-	}
-
-	@Override
-	public boolean isValidValue(String str) {
-		try {
-			double value = Double.parseDouble(str);
-			return value >= minValue && value <= maxValue;
-		} catch (NumberFormatException ignore) {
-			return false;
-		}
-	}
-
-	@Override
-	@SideOnly(Side.CLIENT)
-	public IGuiConfigEntry toEntry(ModGuiConfig screen, ModGuiConfigEntries entryList) {
-		return new DoubleEntry(screen, entryList, this);
-	}
-
-	public boolean hasSlidingControl() {
-		return hasSlidingControl;
-	}
-
-	public void setHasSlidingControl(boolean hasSlidingControl) {
-		this.hasSlidingControl = hasSlidingControl;
-	}
+    public void setHasSlidingControl(boolean hasSlidingControl) {
+        this.hasSlidingControl = hasSlidingControl;
+    }
 }

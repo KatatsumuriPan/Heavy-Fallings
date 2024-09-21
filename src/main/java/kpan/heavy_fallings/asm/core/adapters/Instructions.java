@@ -1,6 +1,7 @@
 package kpan.heavy_fallings.asm.core.adapters;
 
 import com.google.common.collect.Lists;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.EnumSet;
@@ -23,7 +24,7 @@ import org.objectweb.asm.Opcodes;
 public class Instructions implements List<Instr> {
     private final List<Instr> instructions;
 
-    public Instructions() { this(Lists.newArrayList()); }
+    public Instructions() { this(new ArrayList<>()); }
     public Instructions(List<Instr> instructions) { this.instructions = instructions; }
 
     public Instructions addInstr(Instr instr) {
@@ -432,11 +433,16 @@ public class Instructions implements List<Instr> {
         public final int opcode;
         private final Object[] params;
         private final VisitType type;
+        private boolean asRuntimeName = true;
 
         Instr(int opcode, VisitType type, Object... params) {
             this.opcode = opcode;
             this.type = type;
             this.params = params;
+        }
+
+        public void setAsRuntimeName(boolean asRuntimeName) {
+            this.asRuntimeName = asRuntimeName;
         }
 
         public Object[] getParamsCopy() {
@@ -448,8 +454,13 @@ public class Instructions implements List<Instr> {
                 return;
             switch (type) {
                 case DYNAMIC -> mv.visitInvokeDynamicInsn((String) params[0], (String) params[1], (Handle) params[2], (Object[]) params[3]);
-                case FIELD -> mv.visitFieldInsn(opcode, (String) params[0], (String) params[1], (String) params[2]);
-                case IINC -> mv.visitIincInsn((Integer) params[0], (Integer) params[1]);//なんかのエラーを防ぐためにintではなくInteger
+                case FIELD -> {
+                    if (asRuntimeName)
+                        mv.visitFieldInsn(opcode, (String) params[0], AsmNameRemapper.mcp2RuntimeFieldName((String) params[0], (String) params[1]), (String) params[2]);
+                    else
+                        mv.visitFieldInsn(opcode, (String) params[0], (String) params[1], (String) params[2]);
+                }
+                case IINC -> mv.visitIincInsn((Integer) params[0], (Integer) params[1]);// なんかのエラーを防ぐためにintではなくInteger
                 case INT -> mv.visitIntInsn(opcode, (Integer) params[0]);
                 case INSN -> mv.visitInsn(opcode);
                 case JUMP -> {
@@ -471,7 +482,12 @@ public class Instructions implements List<Instr> {
                     }
                 }
                 case LDC -> mv.visitLdcInsn(params[0]);
-                case METHOD -> mv.visitMethodInsn(opcode, (String) params[0], (String) params[1], (String) params[2], (Boolean) params[3]);
+                case METHOD -> {
+                    if (asRuntimeName)
+                        mv.visitMethodInsn(opcode, (String) params[0], AsmNameRemapper.mcp2RuntimeMethodName((String) params[0], (String) params[1], (String) params[2]), (String) params[2], (Boolean) params[3]);
+                    else
+                        mv.visitMethodInsn(opcode, (String) params[0], (String) params[1], (String) params[2], (Boolean) params[3]);
+                }
                 case TYPE -> mv.visitTypeInsn(opcode, (String) params[0]);
                 case VAR -> mv.visitVarInsn(opcode, (Integer) params[0]);
                 default -> throw new RuntimeException("Invalid Type:" + type);
@@ -521,6 +537,17 @@ public class Instructions implements List<Instr> {
                 return false;
             if (a.opcode != b.opcode)
                 return false;
+            if (a.type == VisitType.FIELD) {
+                boolean asRuntimeName = a.asRuntimeName || b.asRuntimeName;
+                String an = asRuntimeName ? AsmNameRemapper.mcp2RuntimeFieldName((String) a.params[0], (String) a.params[1]) : AsmNameRemapper.runtime2McpFieldName((String) a.params[1]);
+                String bn = asRuntimeName ? AsmNameRemapper.mcp2RuntimeFieldName((String) b.params[0], (String) b.params[1]) : AsmNameRemapper.runtime2McpFieldName((String) b.params[1]);
+                return a.params[0].equals(b.params[0]) && an.equals(bn) && a.params[2].equals(b.params[2]);
+            } else if (a.type == VisitType.METHOD) {
+                boolean asRuntimeName = a.asRuntimeName || b.asRuntimeName;
+                String an = asRuntimeName ? AsmNameRemapper.mcp2RuntimeMethodName((String) a.params[0], (String) a.params[1], (String) a.params[2]) : AsmNameRemapper.runtime2McpMethodName((String) a.params[1]);
+                String bn = asRuntimeName ? AsmNameRemapper.mcp2RuntimeMethodName((String) b.params[0], (String) b.params[1], (String) b.params[2]) : AsmNameRemapper.runtime2McpMethodName((String) b.params[1]);
+                return a.params[0].equals(b.params[0]) && an.equals(bn) && a.params[2].equals(b.params[2]);
+            }
             return Arrays.equals(a.params, b.params);
         }
 
@@ -742,7 +769,7 @@ public class Instructions implements List<Instr> {
         OpcodeJump(int opcode) { this.opcode = opcode; }
     }
 
-    //Listインターフェース
+    // Listインターフェース
 
     @Override
     public int size() { return instructions.size(); }

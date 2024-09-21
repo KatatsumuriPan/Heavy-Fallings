@@ -1,20 +1,19 @@
 package kpan.heavy_fallings.asm.core.adapters;
 
-import com.google.common.collect.Lists;
 import java.util.ArrayList;
 import java.util.function.Function;
 import javax.annotation.Nonnull;
+import kpan.heavy_fallings.asm.core.AsmNameRemapper;
 import kpan.heavy_fallings.asm.core.adapters.Instructions.Instr;
 import org.objectweb.asm.Handle;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
-import org.objectweb.asm.Opcodes;
 
 public class ReplaceInstructionsAdapter extends MyMethodVisitor {
 
     protected final Instructions targets;
     protected final Function<ArrayList<Instr>, Instructions> instructionFactory;
-    protected final ArrayList<Instr> holds = Lists.newArrayList();//Java7との互換性のために、ダイヤモンド演算子を使用してない
+    protected final ArrayList<Instr> holds = new ArrayList<>();
 
     private int maxMatched = 0;
 
@@ -90,7 +89,7 @@ public class ReplaceInstructionsAdapter extends MyMethodVisitor {
     }
     @Override
     public void visitFieldInsn(int opcode, String owner, String name, String desc) {
-        if (!check(Instr.fieldInsn(opcode, owner, name, desc)))
+        if (!check(Instr.fieldInsn(opcode, owner, AsmNameRemapper.runtime2McpFieldName(name), desc)))
             super.visitFieldInsn(opcode, owner, name, desc);
     }
     @Override
@@ -136,7 +135,7 @@ public class ReplaceInstructionsAdapter extends MyMethodVisitor {
     }
     @Override
     public void visitLocalVariable(String name, String desc, String signature, Label start, Label end, int index) {
-        //これは最後のLOCALVARIABLEで呼ばれる
+        // これは最後のLOCALVARIABLEで呼ばれる
         flushVisits();
         super.visitLocalVariable(name, desc, signature, start, end, index);
     }
@@ -147,14 +146,8 @@ public class ReplaceInstructionsAdapter extends MyMethodVisitor {
     }
     @Override
     public void visitMethodInsn(int opcode, String owner, String name, String desc, boolean itf) {
-        if (api < Opcodes.ASM5 || !check(Instr.methodInsn(opcode, owner, name, desc, itf)))
+        if (!check(Instr.methodInsn(opcode, owner, name, desc, itf)))
             super.visitMethodInsn(opcode, owner, name, desc, itf);
-    }
-    @SuppressWarnings("deprecation")
-    @Override
-    public void visitMethodInsn(int opcode, String owner, String name, String desc) {
-        if (api >= Opcodes.ASM5 || !check(Instr.methodInsn(opcode, owner, name, desc, opcode == Opcodes.INVOKEINTERFACE)))
-            super.visitMethodInsn(opcode, owner, name, desc);
     }
     @Override
     public void visitMultiANewArrayInsn(String desc, int dims) {

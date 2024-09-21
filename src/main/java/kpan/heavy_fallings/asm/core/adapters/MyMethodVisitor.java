@@ -6,6 +6,7 @@ import kpan.heavy_fallings.asm.core.AsmUtil;
 import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
+import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.TypePath;
 
 public class MyMethodVisitor extends MethodVisitor {
@@ -53,6 +54,26 @@ public class MyMethodVisitor extends MethodVisitor {
         if (label == null)
             throw new RuntimeException("Label：L" + index + " is not found.");
         return label;
+    }
+
+    // apiがASM4でもこっちを使ってほしいので少し処理改造
+    @Override
+    public void visitMethodInsn(int opcode, String owner, String name, String desc, boolean itf) {
+        if (api < Opcodes.ASM5) {
+            if (itf != (opcode == Opcodes.INVOKEINTERFACE)) {
+                throw new IllegalArgumentException(
+                        "INVOKESPECIAL/STATIC on interfaces require ASM 5");
+            }
+        }
+        if (mv != null) {
+            mv.visitMethodInsn(opcode, owner, name, desc, itf);
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    @Override
+    public void visitMethodInsn(int opcode, String owner, String name, String desc) {
+        visitMethodInsn(opcode, owner, name, desc, opcode == Opcodes.INVOKEINTERFACE);
     }
 
     @Override
