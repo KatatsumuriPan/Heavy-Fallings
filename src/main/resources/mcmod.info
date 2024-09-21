@@ -4,7 +4,7 @@
     "description": "I think a gravel block is stronger than a torch.",
     "version": "${version}",
     "mcversion": "${mcversion}",
-    "logoFile": "",
+    "logoFile": "assets/heavy_fallings/icon.png",
     "url": "",
     "authorList": ["Katatsumuri.pan"],
     "credits": "",
